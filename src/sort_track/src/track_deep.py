@@ -123,6 +123,7 @@ def callback_image(data):
         class_name= track.get_class()
         #fillout msg
         msg.data = [int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3]), track.track_id, class_name]
+        #msg.data = [int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3]), track.track_id] #list contain string type cannot be published	
         # draw bbox on screen
         color = colors[int(track.track_id) % len(colors)] #for each bbox using different color
         color = [i * 255 for i in color] #from 0-1 to normal rgb value 0-255
