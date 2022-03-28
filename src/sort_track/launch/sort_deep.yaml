@@ -9,6 +9,8 @@ detection_topic: "/darknet_ros/bounding_boxes"
 # Set your output topic here
 tracker_topic: "/sort_track_deep"
 
+# Set your output image topic here
+tracker_img_topic: "/sort_track_deep_img"
 
 image_view:
 

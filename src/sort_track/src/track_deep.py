@@ -44,6 +44,7 @@ def cv2_to_imgmsg(cv_image):
     img_msg.height = cv_image.shape[0]
     img_msg.width = cv_image.shape[1]
     img_msg.encoding = "bgr8"
+    #img_msg.encoding = "rgb8"	
     img_msg.is_bigendian = 0
     img_msg.data = cv_image.tostring()
     img_msg.step = len(img_msg.data) // img_msg.height # That double line is actually integer division, not a comment
@@ -58,7 +59,8 @@ def get_parameters():
     camera_topic = rospy.get_param("~camera_topic")
     detection_topic = rospy.get_param("~detection_topic")
     tracker_topic = rospy.get_param('~tracker_topic')
-    return (camera_topic, detection_topic, tracker_topic)
+    tracker_img_topic = rospy.get_param('~tracker_img_topic')	
+    return (camera_topic, detection_topic, tracker_topic, tracker_img_topic)
 
 
 def callback_det(data):
@@ -88,7 +90,8 @@ def callback_image(data):
     #bridge = CvBridge()
     #cv_rgb = bridge.imgmsg_to_cv2(data, "bgr8")
     cv_rgb = imgmsg_to_cv2(data)
-    cv_rgb = cv2.cvtColor(cv_rgb, cv2.COLOR_BGR2RGB)
+    cv_rgb = cv2.cvtColor(cv_rgb, cv2.COLOR_RGB2BGR)# cv_rgb acturally should be cv_bgr		
+    #cv_rgb = cv2.cvtColor(cv_rgb, cv2.COLOR_BGR2RGB)
     #Features and detections
     features = encoder(cv_rgb, detections)
 
@@ -122,8 +125,8 @@ def callback_image(data):
         bbox = track.to_tlbr()
         class_name= track.get_class()
         #fillout msg
-        msg.data = [int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3]), track.track_id, class_name]
-        #msg.data = [int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3]), track.track_id] #list contain string type cannot be published	
+        #msg.data = [int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3]), track.track_id, class_name] #list contain string type cannot be published
+        msg.data = [int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3]), track.track_id]		
         # draw bbox on screen
         color = colors[int(track.track_id) % len(colors)] #for each bbox using different color
         color = [i * 255 for i in color] #from 0-1 to normal rgb value 0-255
@@ -143,6 +146,8 @@ def callback_image(data):
                 continue
             thickness = int(np.sqrt(64/float(j+1))*2)
             cv2.line(cv_rgb, (pts[track.track_id][j-1]), (pts[track.track_id][j]), color, thickness)
+    #msg_img=cv2_to_imgmsg(cv_rgb)
+    msg_img.append(cv_rgb)	
     cv2.imshow("YOLOV4+SORT", cv_rgb)
     cv2.waitKey(3)
         
@@ -151,6 +156,7 @@ def main():
     global tracker  #remember global
     global encoder
     global msg
+    global msg_img	
     global allowed_classes
     global pts
     # custom allowed classes (uncomment line below to customize tracker for only people)
@@ -159,6 +165,8 @@ def main():
     pts = [deque(maxlen=30) for _ in range(1000)]
     
     msg = IntList()
+    msg_img = []		
+    #msg_img = Image()	
     # Definition of the parameters
     max_cosine_distance = 0.4  #max_cosine_distance = 0.2
     nn_budget = None   #nn_budget = 100
@@ -175,7 +183,7 @@ def main():
     rospy.init_node('sort_tracker', anonymous=True)
     rate = rospy.Rate(10)
     # Get the parameters
-    (camera_topic, detection_topic, tracker_topic) = get_parameters()
+    (camera_topic, detection_topic, tracker_topic, tracker_img_topic) = get_parameters()
     #Subscribe to darknet_ros to get BoundingBoxes from YOLO
     #sub_detection = rospy.Subscriber(detection_topic, BoundingBoxes , callback_det)
     #Subscribe to image topic
@@ -185,8 +193,12 @@ def main():
     while not rospy.is_shutdown():
         #Publish results of object tracking
         pub_trackers = rospy.Publisher(tracker_topic, IntList, queue_size=10)
+        pub_trackers_img = rospy.Publisher(tracker_img_topic,Image, queue_size=10)		
         print(msg)
         pub_trackers.publish(msg)
+        if len(msg_img):
+            pub_trackers_img.publish(cv2_to_imgmsg(msg_img[-1]))
+            msg_img[:] = []
         rate.sleep()
 
 
